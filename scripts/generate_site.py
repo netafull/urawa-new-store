@@ -218,9 +218,8 @@ def render_card(store: dict, today: datetime.date) -> str:
                 best[site] = src
     links = []
     for site, src in best.items():
-        url, label = src["list_url"], SITE_LABEL[site]
-        links.append(f'<a href="{esc(url)}" target="_blank" rel="noopener noreferrer nofollow">'
-                     f'求人サイト（{esc(label)}）で見る</a>')
+        url = src["list_url"]
+        links.append(f'<a href="{esc(url)}" target="_blank" rel="noopener noreferrer nofollow">→詳細</a>')
     src_html = f'<div class="src">{"".join(links)}</div>' if links else ""
     stale_html = '<div class="stale-note">最近の求人では確認できませんでした</div>' if stale else ""
     return (f'<div class="item{" stale" if stale else ""}">'
@@ -275,7 +274,7 @@ def render_about(name: str) -> str:
 <li>給与</li>
 </ul>
 <h2>出典</h2>
-<p>各お店の「求人サイトで見る」は、求人サイトの一覧ページへのリンクです。求人の詳細は、そちらでご覧ください。</p>
+<p>各お店の「→詳細」は、求人サイトの一覧ページへのリンクです。求人の詳細は、そちらでご覧ください。</p>
 <h2>ご注意</h2>
 <ul>
 <li>求人の掲載内容から“オープン予定らしい”と判断した情報で、不正確なことがあります。開店日・営業内容は店舗の公式発表をご確認ください。</li>

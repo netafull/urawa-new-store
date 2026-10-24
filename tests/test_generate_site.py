@@ -96,6 +96,12 @@ class TestGenerate(unittest.TestCase):
         self.assertNotIn("<b>町", idx)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;&amp;&quot;&#x27;店", idx)
 
+    def test_single_source_link_is_plain_detail(self):
+        srcs = [{"site": "kyujinbox", "list_url": "https://a.test/1", "last_seen": "2026-10-20"}]
+        idx = render([store("A店", sources=srcs)])["index.html"]
+        self.assertIn(">→詳細</a>", idx)
+        self.assertNotIn("求人サイト（", idx)
+
     def test_source_links_safe_and_deduped(self):
         srcs = [{"site": "kyujinbox", "list_url": "https://a.test/1", "last_seen": "2026-10-01"},
                 {"site": "kyujinbox", "list_url": "https://a.test/2", "last_seen": "2026-10-20"},
@@ -103,8 +109,9 @@ class TestGenerate(unittest.TestCase):
                 {"site": "other", "list_url": "https://evil.test/", "last_seen": "2026-10-20"},
                 {"site": "baitoru", "list_url": "javascript:alert(1)", "last_seen": "2026-10-21"}]
         idx = render([store("A店", sources=srcs)])["index.html"]
-        self.assertEqual(idx.count("求人サイト（求人ボックス）で見る"), 1)
-        self.assertEqual(idx.count("求人サイト（バイトル）で見る"), 1)
+        self.assertEqual(idx.count(">→詳細</a>"), 2)
+        self.assertNotIn("求人ボックス", idx)
+        self.assertNotIn("バイトル", idx)
         self.assertIn('href="https://a.test/2"', idx)
         self.assertIn("https://b.test/x?a=1&amp;b=2", idx)
         self.assertNotIn("evil.test", idx)
