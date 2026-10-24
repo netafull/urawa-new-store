@@ -1,0 +1,27 @@
+# tests/fixtures/ に置く、求人サイトの一覧ページ・詳細ページのスナップショット(ファイル名のみ)。
+#
+# これらは求人サイト(バイトル・求人ボックス)から取得したページのコピーで、求人本文を含むため、
+# **リポジトリには入れていない**(.gitignore で除外。各サイトの規約への配慮)。
+# 手元にこのディレクトリが無い環境(GitHubのクリーンなチェックアウトなど)では、
+# フィクスチャを使うテスト(tests/test_parsers.py)は自動でスキップされる。
+#
+# 取り直す手順(README の「テストのフィクスチャ」参照): 
+#   URAWA_SAVE_HTML_DIR=/tmp/urawa-html python3 scripts/crawl.py
+#   で保存された <dir>/baitoru/ と <dir>/kyujinbox/ を、下の名前に付け替えて tests/fixtures/ に置く。
+#   取得は間隔6秒・必要最小限で、robots.txt と各サイトの規約を守ること。
+#   詳細ページは https://www.baitoru.com/jobdetail/{求人ID}/ を1件ずつ手で取る(2件で足りる)。
+#
+baitoru/list_page1.html
+baitoru/list_page2.html
+baitoru/list_page3.html
+baitoru_detail/kura.html
+baitoru_detail/yono.html
+kyujinbox/opening_staff_p1.html
+kyujinbox/opening_staff_p2.html
+kyujinbox/opening_staff_p3.html
+kyujinbox/opening_p1.html
+kyujinbox/opening_p2.html
+kyujinbox/opening_p3.html
+kyujinbox/shinki_open_p1.html
+kyujinbox/shinki_open_p2.html
+kyujinbox/shinki_open_p3.html

@@ -1,0 +1,67 @@
+name: update
+
+on:
+  # 定期実行はGitHubのscheduleを使わず、Google Cloud Schedulerから
+  # workflow_dispatch APIを叩く方式にする(姉妹サイトのコンビニポチ等と同じ)。
+  # 理由: GitHub側のscheduleは公称間隔に対し最長12時間超の欠測が実測されて
+  # おり(2026-08-25〜29、他サイトで確認済み)、workflow_dispatchはその間引きの
+  # 対象外のため。
+  #
+  # 発火元: Cloud Scheduler ジョブ urawa-update(GCPプロジェクト manga-rss /
+  #   asia-northeast1、毎朝7時 JST)。1日1回で足りる(求人サイトの新着は日次で見れば十分)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    # ubuntu-latest は切り替わる予告があるため、Ubuntu 24.04に固定している。
+    # 切り替えるときは動作を確認してから変えること
+    runs-on: ubuntu-24.04
+    # 1回の取得は最大約43リクエスト、間隔6秒で5分前後。余裕を見て30分
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: 依存をインストール
+        run: pip install -r requirements.txt
+
+      - name: 求人サイトの一覧を取得
+        # 全サイトで一覧が1件も取れなかった(403/429等)場合は非ゼロで終了し、
+        # data/ を更新せずにここでジョブを失敗させる(次のステップに進まない)
+        run: python3 scripts/crawl.py
+
+      - name: サイトを生成
+        run: python3 scripts/generate_site.py
+
+      - name: コミットしてプッシュ
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 新しいファイルも見るため、git diff ではなく status を使う
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "変更なし"
+            exit 0
+          fi
+          git add -A
+          # コンフリクトマーカーが混入したままコミットされる事故が他サイトで
+          # 起きているため、push前に必ず確認する
+          if git grep -qE '^(<<<<<<<|>>>>>>>)' -- data/ docs/; then
+            echo "::error::コンフリクトマーカーを検出したため中止します"
+            exit 1
+          fi
+          git commit -m "新店舗情報を更新 ($(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M'))"
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main
+
+      # 通知(ntfy)は後で追加する(NTFY_TOPIC が未設定のため、今回は入れない)

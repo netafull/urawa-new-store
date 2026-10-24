@@ -1,0 +1,58 @@
+{
+  "user_agent": "urawa-new-store/0.1 (+https://netafull.github.io/urawa-new-store/)",
+  "request_interval_seconds": 6,
+  "max_requests_per_run": 50,
+  "max_detail_fetches": 15,
+  "max_pages_per_list": 5,
+  "baitoru": {
+    "site_name": "バイトル",
+    "base_url": "https://www.baitoru.com",
+    "list_url": "https://www.baitoru.com/kanto/jlist/saitama/saitamashi/saitamashiurawaku/mrt21/srt2/",
+    "forbidden_prefixes": [
+      "/mypage/",
+      "/preview/",
+      "/remindid/",
+      "/mailmag/",
+      "/entry/",
+      "/alert/",
+      "/api/"
+    ]
+  },
+  "kyujinbox": {
+    "site_name": "求人ボックス",
+    "base_url": "https://xn--pckua2a7gp15o89zb.com",
+    "keywords": [
+      "オープニングスタッフ",
+      "オープニング",
+      "新規オープン"
+    ],
+    "extra_keywords": [
+      "店長候補",
+      "オープニングメンバー",
+      "新規開院"
+    ],
+    "extra_max_pages": 2,
+    "area": "さいたま市浦和区",
+    "forbidden_prefixes": [
+      "/jb/",
+      "/rd/",
+      "/rd-line/",
+      "/rd-and/",
+      "/api/",
+      "/jbn/",
+      "/jbi/",
+      "/ms/",
+      "/my/",
+      "/apply",
+      "/map/",
+      "/pdf/"
+    ]
+  },
+  "site_name": "浦和新店舗情報（仮）",
+  "site_tagline": "さいたま市浦和区の、オープン予定らしいお店",
+  "site_color": "#C2185B",
+  "stale_days": 30,
+  "new_days": 7,
+  "near_months": 2,
+  "noindex": false
+}

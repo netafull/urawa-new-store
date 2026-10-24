@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+.pytest_cache/
+# 実行ログ用なのでコミットしない
+data/run_summary.json
+# 求人サイトの一覧・詳細ページのスナップショット(規約対策でリポジトリに入れない。tests/fixtures_manifest.txt 参照)
+tests/fixtures/
