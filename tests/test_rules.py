@@ -2,6 +2,7 @@
 """判定ルール・名寄せのユニットテスト(HTML不要。fixtures が無くても動く)。"""
 
 import datetime
+import json
 import os
 import sys
 import unittest
@@ -360,8 +361,11 @@ class TestExitCode(unittest.TestCase):
                    '<div class="p-result_area">埼玉県 さいたま市 浦和区 高砂 / 浦和駅 徒歩1分</div>'
                    '<div class="p-result_lines">仕事内容</div></section>')
 
-    def run_main(self, fake_get):
+    def run_main(self, fake_get, ci=None):
+        """crawl.main を FakeFetcher で実行する。戻り値: (終了コード, stores.jsonの中身, 要求したURLの一覧, summary)。
+        ci=True で GITHUB_ACTIONS=true、ci=False/None で未設定にする"""
         import tempfile
+        urls: list[str] = []
 
         class FakeFetcher:
             count = 0
@@ -370,10 +374,15 @@ class TestExitCode(unittest.TestCase):
                 pass
 
             def get(self, url, forbidden=None):
+                urls.append(url)
                 return fake_get(url)
 
+        env_keys = ("URAWA_OFFLINE_HTML_DIR", "GITHUB_ACTIONS")
+        saved_env = {k: os.environ.pop(k, None) for k in env_keys}
+        if ci:
+            os.environ["GITHUB_ACTIONS"] = "true"
         orig = (crawl.Fetcher, crawl.STORES_PATH, crawl.SUMMARY_PATH, crawl.CONFIG["kyujinbox"]["keywords"],
-                crawl.CONFIG["kyujinbox"]["extra_keywords"], os.environ.pop("URAWA_OFFLINE_HTML_DIR", None))
+                crawl.CONFIG["kyujinbox"]["extra_keywords"])
         with tempfile.TemporaryDirectory() as tmp:
             crawl.Fetcher = FakeFetcher
             crawl.STORES_PATH = Path(tmp) / "stores.json"
@@ -384,20 +393,25 @@ class TestExitCode(unittest.TestCase):
             try:
                 code = crawl.main()
                 stores_text = crawl.STORES_PATH.read_text(encoding="utf-8")
+                summary = json.loads(crawl.SUMMARY_PATH.read_text(encoding="utf-8"))
             finally:
                 (crawl.Fetcher, crawl.STORES_PATH, crawl.SUMMARY_PATH, crawl.CONFIG["kyujinbox"]["keywords"],
-                 crawl.CONFIG["kyujinbox"]["extra_keywords"], _) = orig
-        return code, stores_text
+                 crawl.CONFIG["kyujinbox"]["extra_keywords"]) = orig
+                os.environ.pop("GITHUB_ACTIONS", None)
+                for k, v in saved_env.items():
+                    if v is not None:
+                        os.environ[k] = v
+        return code, stores_text, urls, summary
 
     def test_all_blocked_is_nonzero_and_keeps_stores(self):
         def blocked(url):
             raise crawl.BlockedError("HTTP 403")
-        code, stores_text = self.run_main(blocked)
+        code, stores_text, _, _ = self.run_main(blocked)
         self.assertEqual(code, 1)
         self.assertEqual(stores_text, "[]")
 
     def test_all_pages_empty_is_nonzero(self):
-        code, _ = self.run_main(lambda url: "<html></html>")
+        code, _, _, _ = self.run_main(lambda url: "<html></html>")
         self.assertEqual(code, 1)
 
     def test_partial_success_is_zero_and_saved(self):
@@ -405,6 +419,36 @@ class TestExitCode(unittest.TestCase):
             if "baitoru.com" in url:
                 raise crawl.BlockedError("HTTP 403")
             return self.KYUJIN_HTML if "pg=" not in url else "<html></html>"
-        code, stores_text = self.run_main(partial)
+        code, stores_text, _, _ = self.run_main(partial)
         self.assertEqual(code, 0)
         self.assertIn("テスト食堂 浦和店", stores_text)
+
+    def kyujin_ok(self, url):
+        if "baitoru.com" in url:
+            raise AssertionError("baitoru にリクエストが出た: " + url)
+        return self.KYUJIN_HTML if "pg=" not in url else "<html></html>"
+
+    def test_ci_skips_baitoru_entirely(self):
+        code, stores_text, urls, summary = self.run_main(self.kyujin_ok, ci=True)
+        self.assertFalse([u for u in urls if "baitoru.com" in u])  # robots.txt を含め1件も出ない
+        self.assertTrue(urls)  # 求人ボックスは取る
+        self.assertEqual(summary["sites"]["baitoru"]["status"], "skipped_in_ci")
+        self.assertEqual(summary["sites"]["baitoru"]["items_parsed"], 0)
+        self.assertEqual(code, 0)
+        self.assertIn("テスト食堂 浦和店", stores_text)
+        self.assertFalse(summary["all_failed"])
+
+    def test_without_ci_baitoru_is_fetched(self):
+        def get(url):
+            return "<html></html>"
+        _, _, urls, summary = self.run_main(get, ci=False)
+        self.assertTrue([u for u in urls if "baitoru.com" in u])
+        self.assertNotEqual(summary["sites"]["baitoru"]["status"], "skipped_in_ci")
+
+    def test_ci_all_failed_judged_without_skipped_site(self):
+        # 求人ボックスが0件ならスキップしたバイトルを除いて失敗(非ゼロ、stores.jsonは不変)
+        code, stores_text, urls, summary = self.run_main(lambda url: "<html></html>", ci=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(stores_text, "[]")
+        self.assertTrue(summary["all_failed"])
+        self.assertFalse([u for u in urls if "baitoru.com" in u])

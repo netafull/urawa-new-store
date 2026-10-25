@@ -54,5 +54,9 @@
   "stale_days": 30,
   "new_days": 7,
   "near_months": 2,
-  "noindex": false
+  "noindex": false,
+  "skip_sites_in_ci": [
+    "baitoru"
+  ],
+  "recent_open_days": 60
 }

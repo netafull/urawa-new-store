@@ -29,6 +29,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import period  # noqa: E402
+
 CONFIG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
 DATA = ROOT / "data"
 DOCS = ROOT / "docs"
@@ -86,12 +90,18 @@ def display_place(store: dict) -> str:
     return f"{addr}（{st}）" if st else addr
 
 
-def group_of(store: dict, today: datetime.date) -> str:
-    """near(今後2か月) / later / unknown。季節・年の精度は later。"""
+def group_of(store: dict, today: datetime.date) -> str | None:
+    """near(今後2か月) / later / unknown / opened(開店日を過ぎて recent_open_days 日以内) /
+    None(開店日を過ぎて古い。サイトには出さない)。
+    開店時期の「終わり」の日付が今日より前なら開店済みとみなす(season/year でも、過ぎていればこちらが優先)。"""
     start = parse_date(store.get("open_period_start"))
-    if start is None or store.get("open_period_precision") in (None, "unknown"):
+    prec = store.get("open_period_precision")
+    end = period.open_period_end(store.get("open_period_start"), prec)
+    if start is None or end is None:
         return "unknown"
-    if store.get("open_period_precision") in ("season", "year"):
+    if end < today:
+        return "opened" if (today - end).days <= CONFIG.get("recent_open_days", 60) else None
+    if prec in ("season", "year"):
         return "later"
     return "near" if start <= add_months(today, CONFIG.get("near_months", 2)) else "later"
 
@@ -242,10 +252,15 @@ def updated_date(summary_path: Path, today: datetime.date) -> datetime.date:
 
 def render_index(stores: list[dict], today: datetime.date, updated: datetime.date) -> str:
     name = CONFIG.get("site_name", "浦和ポチ")
-    groups = {"near": [], "later": [], "unknown": []}
+    groups = {"near": [], "later": [], "unknown": [], "opened": []}
     for s in sorted(stores, key=sort_key):
-        groups[group_of(s, today)].append(s)
-    heads = (("near", "近日中（今後2か月）"), ("later", "それ以降"), ("unknown", "時期不明"))
+        g = group_of(s, today)
+        if g:  # None(開店済みで古いもの)は載せない
+            groups[g].append(s)
+    groups["opened"].sort(key=lambda s: (s.get("open_period_start") or "", s.get("store_name") or ""), reverse=True)
+    shown = sum(len(v) for v in groups.values())
+    heads = (("near", "近日中（今後2か月）"), ("later", "それ以降"), ("unknown", "時期不明"),
+             ("opened", "オープンしたとみられるお店"))
     sections = []
     for key, head in heads:
         items = groups[key]
@@ -256,7 +271,7 @@ def render_index(stores: list[dict], today: datetime.date, updated: datetime.dat
     if not sections:
         sections.append('<p class="empty">いま載せられるお店はありません。</p>')
     body = (f'<div class="notice">{esc(NOTICE)}</div>\n'
-            f'<p class="summary">{len(stores)}件 ｜ 最終更新: {updated.year}年{updated.month}月{updated.day}日</p>\n'
+            f'<p class="summary">{shown}件 ｜ 最終更新: {updated.year}年{updated.month}月{updated.day}日</p>\n'
             + "\n".join(sections))
     return page(f"{name}｜{CONFIG.get('site_tagline', '')}", CONFIG.get("site_tagline", ""), body, name)
 
@@ -267,6 +282,7 @@ def render_about(name: str) -> str:
 <p>{esc(name)}は、さいたま市浦和区で新しくオープンしそうなお店を、求人サイトの情報からまとめたサイトです。</p>
 <h2>仕組み</h2>
 <p>求人サイトの一覧ページに載った情報から、店名・場所・開店時期だけを自動で抜き出して整理しています。開店時期は、書かれている表現を「2026年12月上旬」のような形にそろえたものです。年が書かれていない場合は推定で補い、「（推定）」と表示します。</p>
+<p>開店時期を過ぎたお店は、しばらくのあいだ「オープンしたとみられるお店」に移します。それより古くなったお店は表示しません。</p>
 <h2>保存・表示していないもの</h2>
 <ul>
 <li>求人の本文・タイトル</li>

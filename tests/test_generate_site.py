@@ -138,6 +138,51 @@ class TestGenerate(unittest.TestCase):
         self.assertEqual(g.group_of(g.pick(stores[3]), TODAY), "near")  # 12/15 は今後2か月以内
         self.assertEqual(g.group_of(g.pick(stores[4]), TODAY), "later")  # 季節は「それ以降」
 
+    def test_group_boundaries_end_date(self):
+        gp = lambda start, prec: g.group_of(g.pick(store("x", start=start, prec=prec)), TODAY)
+        self.assertEqual(gp("2026-10-24", "day"), "near")     # 終わり=今日 は近日中
+        self.assertEqual(gp("2026-10-23", "day"), "opened")   # 昨日なら開店済み
+        self.assertEqual(gp("2026-10-01", "month"), "near")   # 月末(10/31)まで近日中
+        self.assertEqual(gp("2026-09-01", "month"), "opened")  # 9月末 < 今日
+        self.assertEqual(gp("2026-10-21", "ten_days"), "near")   # 下旬=10/31
+        self.assertEqual(gp("2026-10-11", "ten_days"), "opened")  # 中旬=10/20 < 今日
+        self.assertEqual(gp("2026-12-24", "day"), "near")     # 今後2か月ちょうど
+        self.assertEqual(gp("2026-12-25", "day"), "later")
+        self.assertEqual(gp("2026-09-01", "season"), "later")  # 秋は11/30まで続くので「それ以降」
+        self.assertEqual(gp("2026-06-01", "season"), "opened")  # 夏(8/31)は過ぎた(54日前)
+        self.assertIsNone(gp("2026-03-01", "season"))  # 春(5/31)は147日前で古すぎて出さない
+        self.assertEqual(gp("2025-12-01", "season"), None)
+        self.assertEqual(g.group_of(g.pick(store("x", start="2026-12-01", prec="season")), TODAY), "later")  # 冬は年またぎ
+        self.assertEqual(gp("2026-01-01", "year"), "later")   # 2026年は12/31まで
+        self.assertEqual(gp("2025-01-01", "year"), None)
+        self.assertEqual(g.group_of(g.pick(store("x", start=None, prec="unknown")), TODAY), "unknown")
+
+    def test_recent_open_days_boundary(self):
+        # 終わり=2026-08-25 の翌日が今日から60日前、のようにずらして境界を確認する
+        end60 = TODAY - datetime.timedelta(days=60)
+        end61 = TODAY - datetime.timedelta(days=61)
+        self.assertEqual(g.group_of(g.pick(store("x", start=end60.isoformat(), prec="day")), TODAY), "opened")
+        self.assertIsNone(g.group_of(g.pick(store("x", start=end61.isoformat(), prec="day")), TODAY))
+
+    def test_opened_section_last_and_shown_count(self):
+        stores = [store("開店済み新", start="2026-10-01", prec="day", period="2026年10月1日"),
+                  store("開店済み古", start="2026-09-05", prec="day", period="2026年9月5日"),
+                  store("古すぎ", start="2026-06-01", prec="day", period="2026年6月1日"),
+                  store("近日", start="2026-11-01", period="2026年11月"),
+                  store("後", start="2027-04-01", period="2027年4月"),
+                  store("不明", period=g.UNKNOWN_PERIOD, start=None, prec="unknown")]
+        idx = render(stores)["index.html"]
+        self.assertNotIn("古すぎ", idx)  # 60日より古い開店済みは載せない
+        self.assertIn("5件 ｜", idx)    # 件数は実際に載せた数
+        order = [idx.index(h) for h in ("近日中", "それ以降", "時期不明", "オープンしたとみられるお店")]
+        self.assertEqual(order, sorted(order))
+        self.assertLess(idx.index(">近日<"), idx.index(">後<"))
+        self.assertLess(idx.index("開店済み新"), idx.index("開店済み古"))  # 新しく開いた順
+        self.assertIn("2026年10月1日", idx)  # 開店時期の表示は同じ
+
+    def test_about_mentions_opened_rule(self):
+        self.assertIn("オープンしたとみられるお店", g.render_about("x"))
+
     def test_empty_groups_hidden(self):
         idx = render([store("先", start="2026-11-01")])["index.html"]
         self.assertNotIn("それ以降", idx)

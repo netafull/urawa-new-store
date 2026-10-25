@@ -166,3 +166,36 @@ def _infer(prec: str, mo: int, d: int | None, dec: str | None, today: datetime.d
 def better(new: dict, old: dict) -> bool:
     """new の精度が old より高いか。"""
     return RANK[new["precision"]] > RANK.get(old.get("open_period_precision", "unknown"), 0)
+
+
+def open_period_end(start_iso: str | None, precision: str | None) -> datetime.date | None:
+    """開店時期の「終わり」の日付。start と precision から求める(unknown・不明は None)。
+    day=その日 / ten_days=上旬(start が1〜10日)は10日・中旬(11〜20日)は20日・下旬(21日〜)は月末 /
+    month=月末 / season=季節の最終月の月末(冬は翌年2月末) / year=12月31日"""
+    if not start_iso or precision in (None, "unknown"):
+        return None
+    try:
+        st = datetime.date.fromisoformat(start_iso)
+    except ValueError:
+        return None
+
+    def month_end(y: int, m: int) -> datetime.date:
+        return datetime.date(y, m, calendar.monthrange(y, m)[1])
+
+    if precision == "day":
+        return st
+    if precision == "ten_days":
+        if st.day <= 10:
+            return datetime.date(st.year, st.month, 10)
+        if st.day <= 20:
+            return datetime.date(st.year, st.month, 20)
+        return month_end(st.year, st.month)
+    if precision == "month":
+        return month_end(st.year, st.month)
+    if precision == "season":
+        last = st.month + 2  # 季節は3か月(春3〜5、夏6〜8、秋9〜11、冬12〜2)
+        y = st.year + (1 if last > 12 else 0)
+        return month_end(y, (last - 1) % 12 + 1)
+    if precision == "year":
+        return datetime.date(st.year, 12, 31)
+    return None

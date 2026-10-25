@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """さいたま市浦和区の「新規オープン店舗」を求人サイトの一覧ページから検出し、
-data/stores.json に1店舗1レコードで蓄積する(公開サイトは作らない)。
+data/stores.json に1店舗1レコードで蓄積する。
 
-取得元はバイトル(新着順の一覧)と求人ボックス(キーワード別の一覧)だけ。
-求人詳細ページには行かない。求人の本文・タイトル全文・給与・詳細URLは保存せず、
-求人の文言(抜粋を含む)は一切書き出さず、店名・勤務地・正規化した開店時期・浦和区の根拠・
+取得元はバイトル(新着順の一覧)と求人ボックス(キーワード別の一覧)。求人ボックスの詳細は取らない。
+バイトルだけ、新店候補になった店に限って求人詳細を1店舗1件(上限あり)取り、店名・住所・開店時期を補う。
+求人の文言(本文・タイトル・抜粋)は一切書き出さず、店名・勤務地・正規化した開店時期・浦和区の根拠・
 出典・初回/最終確認日だけを残す。判定のために文言を読むのはメモリ内だけ。
 
+GitHub Actions 上(環境変数 GITHUB_ACTIONS=true)では、config の skip_sites_in_ci に挙げたサイト
+(バイトル)にはリクエストを一切出さない(ActionsのIPからは403になるため。回避はしない)。
 再実行すると既存レコードを更新する(first_seen は保持)。
-サイトごとにこけても(403等)、他サイトの処理は続行する。
+サイトごとにこけても(403等)、他サイトの処理は続行する。取得対象のサイトがすべて一覧0件なら
+非ゼロで終了し、stores.json は更新しない。
 """
 
 from __future__ import annotations
@@ -438,7 +441,17 @@ def main(only: str | None = None) -> int:
     stores = load_stores()
     summary = {"run_at": now_iso(), "mode": "offline" if offline_dir else "live", "new_found": 0, "sites": {}}
 
-    if only in (None, "baitoru"):
+    in_ci = os.environ.get("GITHUB_ACTIONS") == "true"
+    skipped = set(CONFIG.get("skip_sites_in_ci", [])) if in_ci else set()
+
+    def mark_skipped(site: str) -> None:
+        st = summary["sites"][site] = new_site_stats()
+        st["status"] = "skipped_in_ci"
+        st["note"] = "GitHub Actions 上ではリクエストを出さない設定(skip_sites_in_ci)"
+
+    if only in (None, "baitoru") and "baitoru" in skipped:
+        mark_skipped("baitoru")
+    elif only in (None, "baitoru"):
         st = summary["sites"]["baitoru"] = new_site_stats()
         cfg = CONFIG["baitoru"]
         forbidden = load_robots(fetcher, cfg["base_url"], cfg["forbidden_prefixes"], st)
@@ -452,7 +465,9 @@ def main(only: str | None = None) -> int:
             if merge_record(stores, rec, run_date):
                 summary["new_found"] += 1
 
-    if only in (None, "kyujinbox"):
+    if only in (None, "kyujinbox") and "kyujinbox" in skipped:
+        mark_skipped("kyujinbox")
+    elif only in (None, "kyujinbox"):
         cfg = CONFIG["kyujinbox"]
         agg = summary["sites"]["kyujinbox"] = new_site_stats()
         forbidden = load_robots(fetcher, cfg["base_url"], cfg["forbidden_prefixes"], agg)
@@ -485,7 +500,9 @@ def main(only: str | None = None) -> int:
     # 全サイトで一覧が1件も取れなかった(403/429・構造変更・通信失敗など)場合は、stores.json を
     # 書き換えずに非ゼロで終了する(ジョブを失敗させ、data/ と docs/ を壊さない)。
     # 一部のサイトだけ成功したときは、そのぶんを保存して0で終わる
-    all_failed = sum(s["items_parsed"] for s in sites) == 0
+    # スキップしたサイト(skipped_in_ci)は判定から除く。取得対象が1つも無ければ失敗扱いにはしない
+    active = [s for s in sites if s["status"] != "skipped_in_ci"]
+    all_failed = bool(active) and sum(s["items_parsed"] for s in active) == 0
     if not all_failed:
         save_stores(stores)
     excluded_total: dict = {}

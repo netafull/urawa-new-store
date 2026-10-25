@@ -93,3 +93,38 @@ class TestExamples(unittest.TestCase):
     def test_year_boundary_next_year_inference(self):
         r = period.normalize_open_period("1月オープン", datetime.date(2026, 12, 20))
         self.assertEqual((r["period"], r["estimated"]), ("2027年1月（推定）", True))  # 年末に「1月」は翌年へ補う
+
+
+class TestPeriodEnd(unittest.TestCase):
+    def end(self, start, prec):
+        e = period.open_period_end(start, prec)
+        return e.isoformat() if e else None
+
+    def test_ends(self):
+        self.assertEqual(self.end("2026-11-24", "day"), "2026-11-24")
+        self.assertEqual(self.end("2026-12-01", "ten_days"), "2026-12-10")   # 上旬
+        self.assertEqual(self.end("2026-12-11", "ten_days"), "2026-12-20")   # 中旬
+        self.assertEqual(self.end("2026-12-21", "ten_days"), "2026-12-31")   # 下旬は月末
+        self.assertEqual(self.end("2027-02-21", "ten_days"), "2027-02-28")
+        self.assertEqual(self.end("2028-02-21", "ten_days"), "2028-02-29")
+        self.assertEqual(self.end("2026-09-01", "month"), "2026-09-30")
+        self.assertEqual(self.end("2027-04-01", "month"), "2027-04-30")
+        self.assertEqual(self.end("2026-03-01", "season"), "2026-05-31")    # 春
+        self.assertEqual(self.end("2026-06-01", "season"), "2026-08-31")    # 夏
+        self.assertEqual(self.end("2026-09-01", "season"), "2026-11-30")    # 秋
+        self.assertEqual(self.end("2026-12-01", "season"), "2027-02-28")    # 冬は翌年2月末
+        self.assertEqual(self.end("2027-12-01", "season"), "2028-02-29")    # 閏年
+        self.assertEqual(self.end("2027-01-01", "year"), "2027-12-31")
+
+    def test_unknown_and_bad_input(self):
+        self.assertIsNone(self.end(None, "unknown"))
+        self.assertIsNone(self.end("2026-12-01", "unknown"))
+        self.assertIsNone(self.end("2026-12-01", None))
+        self.assertIsNone(self.end("not-a-date", "month"))
+
+    def test_consistent_with_normalizer_starts(self):
+        """normalize_open_period が返す start と precision から、期待どおりの終わりになる"""
+        for text, want in (("12月上旬OPEN", "2026-12-10"), ("12月中旬予定", "2026-12-20"), ("12月下旬オープン", "2026-12-31"),
+                           ("今秋オープン", "2026-11-30"), ("2027年冬オープン", "2028-02-29"), ("令和9年4月に開園", "2027-04-30")):
+            r = n(text)
+            self.assertEqual(self.end(r["start"], r["precision"]), want, text)
