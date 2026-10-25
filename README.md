@@ -109,9 +109,9 @@ python3 -m pytest tests
 
 `generate_site.py` が `data/stores.json` の `publishable=true` だけから `docs/index.html`(一覧)、`docs/about.html`、`docs/style.css`、`docs/assets/icon.svg`、`docs/.nojekyll` を作る(毎回作り直す)。外部CDN・外部スクリプトは使わない。
 
-- 一覧は「近日中（今後2か月）」「それ以降」「時期不明」「オープンしたとみられるお店」の順。開店時期の「終わり」(日=その日、上旬/中旬/下旬=10日/20日/月末、月=月末、季節=最終月の月末、年=12月31日)を過ぎた店は開店済みとみなし、`recent_open_days`(60)日以内なら最下部の「オープンしたとみられるお店」に出し、それより古いものはサイトに出さない(stores.json には残る)。件数表示は実際に載せた数。初回発見日が `new_days`(7)日以内なら「新着」、最終確認日が `stale_days`(30)日以上前なら薄く表示
+- 一覧は「近日中（今後2か月）」「それ以降」「時期不明」「オープンしたとみられるお店」の順。開店時期の「終わり」(日=その日、上旬/中旬/下旬=10日/20日/月末、月=月末、季節=最終月の月末、年=12月31日)を過ぎた店は開店済みとみなし、`recent_open_days`(60)日以内なら最下部の「オープンしたとみられるお店」に出し、それより古いものはサイトに出さない(stores.json には残る)。件数表示は実際に載せた数。初回発見日から `new_days`(2)日間は「新着」(発見日を1日目と数える。`new_badge_from` より前に見つけた初回の一括取得ぶんには付けない)、最終確認日が `stale_days`(30)日以上前なら薄く表示
 - 出典リンクは `rel="noopener noreferrer nofollow"` の別タブ。同じ求人サイトの出典は1つにまとめる
-- config.json: `site_name`、`site_tagline`、`site_color`、`noindex`(既定 false。true で全ページに noindex,nofollow)、`recent_open_days`(60)、`skip_sites_in_ci`、`stale_days`、`new_days`、`near_months`
+- config.json: `site_name`、`site_tagline`、`site_color`、`noindex`(既定 false。true で全ページに noindex,nofollow)、`recent_open_days`(60)、`skip_sites_in_ci`、`stale_days`、`new_days`、`new_badge_from`、`near_months`
 - canonical・OGP・サイトマップ・GA4・CNAME は未設定(必要になったら追加する)
 
 ## テストのフィクスチャ

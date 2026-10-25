@@ -52,7 +52,8 @@
   "site_tagline": "さいたま市浦和区の、オープン予定らしいお店",
   "site_color": "#C2185B",
   "stale_days": 30,
-  "new_days": 7,
+  "new_days": 2,
+  "new_badge_from": "2026-10-25",
   "near_months": 2,
   "noindex": false,
   "skip_sites_in_ci": [

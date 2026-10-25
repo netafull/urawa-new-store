@@ -189,11 +189,20 @@ class TestGenerate(unittest.TestCase):
         self.assertNotIn("時期不明<", idx)
 
     def test_new_badge(self):
-        idx = render([store("新しい", first="2026-10-20"), store("古い", first="2026-10-10")])["index.html"]
-        self.assertEqual(idx.count('<span class="badge">新着</span>'), 1)
-        self.assertRegex(idx, r"新しい<span class=\"badge\">新着</span>")
-        self.assertTrue(g.is_new(g.pick(store("x", first="2026-10-17")), TODAY))   # ちょうど7日
-        self.assertFalse(g.is_new(g.pick(store("x", first="2026-10-16")), TODAY))  # 8日
+        from unittest import mock
+        with mock.patch.dict(g.CONFIG, {"new_days": 2, "new_badge_from": ""}):
+            idx = render([store("新しい", first="2026-10-23"), store("古い", first="2026-10-10")])["index.html"]
+            self.assertEqual(idx.count('<span class="badge">新着</span>'), 1)
+            self.assertRegex(idx, r"新しい<span class=\"badge\">新着</span>")
+            self.assertTrue(g.is_new(g.pick(store("x", first="2026-10-24")), TODAY))   # 発見当日
+            self.assertTrue(g.is_new(g.pick(store("x", first="2026-10-23")), TODAY))   # 2日目
+            self.assertFalse(g.is_new(g.pick(store("x", first="2026-10-22")), TODAY))  # 3日目
+
+    def test_new_badge_skips_initial_batch(self):
+        from unittest import mock
+        with mock.patch.dict(g.CONFIG, {"new_days": 2, "new_badge_from": "2026-10-24"}):
+            self.assertFalse(g.is_new(g.pick(store("x", first="2026-10-23")), TODAY))  # 初回分より前
+            self.assertTrue(g.is_new(g.pick(store("x", first="2026-10-24")), TODAY))
 
     def test_stale(self):
         idx = render([store("最近", last="2026-10-20"), store("古い店", last="2026-09-24")])["index.html"]

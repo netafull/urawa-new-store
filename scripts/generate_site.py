@@ -111,8 +111,15 @@ def sort_key(store: dict):
 
 
 def is_new(store: dict, today: datetime.date) -> bool:
+    """初回発見日から new_days 日間(発見日を1日目と数える)。初回の一括取得ぶんは
+    新着ではないので、new_badge_from より前に見つけた店には付けない。"""
     fs = parse_date(store.get("first_seen"))
-    return fs is not None and 0 <= (today - fs).days <= CONFIG.get("new_days", 7)
+    if fs is None:
+        return False
+    since = parse_date(CONFIG.get("new_badge_from"))
+    if since and fs < since:
+        return False
+    return 0 <= (today - fs).days < CONFIG.get("new_days", 2)
 
 
 def is_stale(store: dict, today: datetime.date) -> bool:
